@@ -5,7 +5,7 @@ pub fn tick(world: &mut World, delta_time: f32) {
     let constant_multiplier = time_scale * time_scale;
     world.player.vel.y += GRAVITY*constant_multiplier;
 
-    let mut x_pos = world.player.hitbox.pos.x + world.player.vel.x;
+    let mut x_pos = world.player.hitbox.pos.x + world.player.vel.x*constant_multiplier;
     let x_hitbox = Hitbox {
         pos: Vector2f { x: x_pos, y: world.player.hitbox.pos.y },
         size: world.player.hitbox.size,
@@ -31,7 +31,7 @@ pub fn tick(world: &mut World, delta_time: f32) {
     }
     world.player.hitbox.pos.x = x_pos;
 
-    let mut y_pos = world.player.hitbox.pos.y + world.player.vel.y;
+    let mut y_pos = world.player.hitbox.pos.y + world.player.vel.y*constant_multiplier;
     let y_hitbox = Hitbox {
         pos: Vector2f { x: world.player.hitbox.pos.x, y: y_pos },
         size: world.player.hitbox.size,

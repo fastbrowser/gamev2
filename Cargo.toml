@@ -5,5 +5,6 @@ edition = "2024"
 
 [dependencies]
 macroquad = "0.4.16"
+rand = "0.10.3"
 rfd = "0.17.2"
 tokio = { version = "1.54.1", features = ["macros", "rt", "rt-multi-thread"] }

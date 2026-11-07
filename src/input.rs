@@ -14,14 +14,14 @@ impl Input {
         match evt {
             Event::Jump => {
                 if world.player.onground {
-                    world.player.vel = world.player.vel.add(0.0, -0.075);
+                    world.player.vel = world.player.vel.add(0.0, -0.5);
                 }
             }
             Event::Left => {
-                world.player.vel.x = -0.1;
+                world.player.vel.x = -0.5;
             }
             Event::Right => {
-                world.player.vel.x = 0.1;
+                world.player.vel.x = 0.5;
             }
         }
     }

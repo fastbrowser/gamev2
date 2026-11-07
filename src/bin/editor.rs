@@ -1,4 +1,4 @@
-use gamev2::{game::Block, vectors::{Vector2f, Vector2i}, worlds};
+use gamev2::{game::{Block, Spike}, vectors::{Vector2f, Vector2i}, worlds};
 use macroquad::prelude::*;
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageLevel};
 
@@ -8,6 +8,7 @@ struct Camera {
 
 pub struct Canvas {
     pub blocks: Vec<Block>,
+    pub spikes: Vec<Spike>,
     pub cam: Camera,
     pub zoom: f32,
     pub windowsize: Vector2f,
@@ -15,8 +16,8 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    async fn new(tex: Texture2D, blocks: Vec<Block>) -> Self {
-        Self { blocks: blocks, cam: Camera { pos: Vector2f::new(0.0, 0.0) }, zoom: 30.0, windowsize: Vector2f::new(800.0, 600.0), blocktexture: tex}
+    async fn new(tex: Texture2D, blocks: Vec<Block>, spikes: Vec<Spike>) -> Self {
+        Self { blocks: blocks, spikes: spikes, cam: Camera { pos: Vector2f::new(0.0, 0.0) }, zoom: 30.0, windowsize: Vector2f::new(800.0, 600.0), blocktexture: tex}
     }
     fn glob2rel(&self, pos: Vector2f) -> Vector2f {
         pos.subvec(self.cam.pos).add((self.windowsize.x/2.0) as f32, (self.windowsize.y/2.0) as f32)
@@ -46,6 +47,16 @@ impl Canvas {
             if drawpos.x < -self.zoom || drawpos.y < -self.zoom || drawpos.x > self.windowsize.x+self.zoom || drawpos.y > self.windowsize.y+self.zoom {continue;}
             draw_texture_ex(&block.texture, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * self.zoom, block.hitbox.size.y as f32 * self.zoom, )), ..Default::default() });
         }
+        for spike in &self.spikes {
+            let drawpos = self.glob2rel(spike.drawbox.pos.mul(self.zoom, self.zoom));
+            if drawpos.x < -self.zoom || drawpos.y < -self.zoom || drawpos.x > self.windowsize.x+self.zoom || drawpos.y > self.windowsize.y+self.zoom {continue;}
+            draw_texture_ex(&spike.texture, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * self.zoom, spike.drawbox.size.y as f32 * self.zoom, )), ..Default::default() });
+            //if DRAW_HITBOXES {
+            //    let drawhitboxpos = self.glob2rel(spike.hitbox.pos.mul(self.zoom, self.zoom));
+            //    draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, spike.hitbox.size.x as f32 * self.zoom, spike.hitbox.size.y as f32 * self.zoom, 1.0, RED);
+            //}
+        }
+        
         let half = self.windowsize.mul(0.5, 0.5);
         let gxi = (mx-half.x+self.cam.pos.x)/self.zoom;
         let gyi = (my-half.y+self.cam.pos.y)/self.zoom;
@@ -89,13 +100,13 @@ pub fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let tex = Texture2D::from_file_with_format(include_bytes!("../../grass.png"), None);
-    tex.set_filter(FilterMode::Nearest);
+    let grasstex = Texture2D::from_file_with_format(include_bytes!("../../grass.png"), None);
+    grasstex.set_filter(FilterMode::Nearest);
     let spiketex = Texture2D::from_file_with_format(include_bytes!("../../spike.png"), None);
     spiketex.set_filter(FilterMode::Nearest);
-    let mut canvas = Canvas::new(tex.clone(), vec![Block::new(Vector2i::new(0,0), Vector2i::new(1,1), 0.6, tex.clone())]).await;
+    let mut canvas = Canvas::new(grasstex.clone(), vec![Block::new(Vector2i::new(0,0), Vector2i::new(1,1), 0.6, grasstex.clone())], vec![Spike::new(Vector2i::new(0,-1), Vector2i::new(1,1), spiketex.clone())]).await;
     let mut lastframepos = Vector2f::new(0.0, 0.0);
-    let mut erasing = false;
+    let mut mode = 0;
     let penciltex = Texture2D::from_file_with_format(include_bytes!("../../pencil.png"), None);
     let backpenciltex = Texture2D::from_file_with_format(include_bytes!("../../backwardspencil.png"), None);
     penciltex.set_filter(FilterMode::Nearest);
@@ -123,16 +134,16 @@ async fn main() {
                     .subvec(mpv);
             }
         }
-        if is_key_down(KeyCode::A) {
+        if is_key_pressed(KeyCode::A) {
             if let Some(path) = FileDialog::new()
                 .set_title("Open World file")
                 .add_filter("World files", &["wl"])
                 .set_directory(std::env::current_dir().expect("this shouldn't happen"))
                 .pick_file() 
             {
-                match worlds::loadblocks(path.to_str().expect("this shouldn't happen"), tex.clone(), spiketex.clone()) {
+                match worlds::loadblocks(path.to_str().expect("this shouldn't happen"), grasstex.clone(), spiketex.clone()) {
                     Ok(blocks) => {
-                        canvas = Canvas::new(tex.clone(), blocks.0).await;
+                        canvas = Canvas::new(grasstex.clone(), blocks.0, blocks.1).await;
                     }
                     Err(e) => {
                         MessageDialog::new()
@@ -146,14 +157,14 @@ async fn main() {
 
             }
         }
-        if is_key_down(KeyCode::S) {
+        if is_key_pressed(KeyCode::S) {
             if let Some(path) = FileDialog::new()
                 .set_title("Open World file")
                 .add_filter("World files", &["wl"])
                 .set_directory(std::env::current_dir().expect("this shouldn't happen"))
                 .save_file() 
             {
-                match worlds::saveblocks(path.to_str().expect("this shouldn't happen"), canvas.blocks.clone(), vec![]) {
+                match worlds::saveblocks(path.to_str().expect("this shouldn't happen"), canvas.blocks.clone(), canvas.spikes.clone()) {
                     Ok(_) => {}
                     Err(e) => {
                         MessageDialog::new()
@@ -167,11 +178,12 @@ async fn main() {
 
             }
         }
+        if is_key_pressed(KeyCode::D) {
+            mode += 1;
+            mode %=3
+        }
         if is_mouse_button_down(MouseButton::Right) {
             canvas.cam.pos = canvas.cam.pos.sub(mpdif.x, mpdif.y);
-        }
-        if is_mouse_button_pressed(MouseButton::Middle) {
-            erasing = !erasing;
         }
         if is_mouse_button_down(MouseButton::Left) {
             let world = canvas.screen_to_world(mp.0, mp.1);
@@ -181,19 +193,40 @@ async fn main() {
             );
             let cell_pos = Vector2f::new(cell.x as f32, cell.y as f32);
 
-            if erasing {
-                canvas.blocks.retain(|b| {
-                    !(b.hitbox.pos == cell_pos && b.hitbox.size == Vector2f::ONE)
-                });
-            } else if canvas.block_at_cell(cell).is_none() {
-                canvas.blocks.push(
-                    Block::new(cell, Vector2i::new(1, 1), 0.6, tex.clone()),
-                );
+            match mode {
+                0 => {
+                    if canvas.block_at_cell(cell).is_none() {
+                        canvas.blocks.push(
+                            Block::new(cell, Vector2i::new(1, 1), 0.6, grasstex.clone()),
+                        );
+                    }
+                }
+                1 => {
+                    canvas.blocks.retain(|b| {
+                        !(b.hitbox.pos == cell_pos && b.hitbox.size == Vector2f::ONE)
+                    });
+                    canvas.spikes.retain(|b| {
+                        !(b.drawbox.pos == cell_pos && b.drawbox.size == Vector2f::ONE)
+                    });
+                }
+                2 => {
+                    if canvas.block_at_cell(cell).is_none() {
+                        canvas.spikes.push(
+                            Spike::new(cell, Vector2i::new(1, 1), spiketex.clone()),
+                        );
+                    }
+                }
+                _ => {}
             }
         }
         canvas.draw(mp.0, mp.1);
-        draw_texture_ex(if erasing {&backpenciltex} else {&penciltex}, mp.0, mp.1-16.0, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( 30.0, 30.0)), ..Default::default() });
-        draw_text("RMB+Drag=move canvas LMB=draw MIDDLE=erase/draw toggle", 10.0, 25.0, 30.0, BLACK);
+        if mode == 1 {
+            draw_texture_ex(&backpenciltex, mp.0, mp.1-16.0, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( 30.0, 30.0)), ..Default::default() });
+        } else {
+            draw_texture_ex(&penciltex, mp.0, mp.1-16.0, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( 30.0, 30.0)), ..Default::default() });
+            draw_texture_ex(match mode {0=>&grasstex,2=>&spiketex, _=>&grasstex}, mp.0, mp.1-16.0, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( 10.0, 10.0)), ..Default::default() });
+        }
+        draw_text("RMB+Drag=move canvas LMB=draw D=erase/draw toggle", 10.0, 25.0, 30.0, BLACK);
         draw_text("S=Save A=Load", 10.0, 55.0, 30.0, BLACK);
         next_frame().await;
     }

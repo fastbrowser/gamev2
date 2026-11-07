@@ -1,4 +1,4 @@
-use std::{fs::File, io::{self, BufWriter, Read, Write}};
+use std::{fs::File, io::{self, BufWriter, Error, Read, Write}};
 
 use macroquad::texture::{FilterMode, Texture2D, load_texture};
 
@@ -8,11 +8,12 @@ pub fn saveblocks(path: &str, blocks: Vec<Block>, spikes: Vec<Spike>) -> io::Res
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
     for block in & blocks {
+        writer.write(&[0]);
         writer.write_all(&(block.hitbox.pos.x as i32).to_le_bytes())?;
         writer.write_all(&(block.hitbox.pos.y as i32).to_le_bytes())?;
     }
-    writer.write(&[b'\n']);
     for spike in &spikes {
+        writer.write(&[1]);
         writer.write_all(&(spike.hitbox.pos.x as i32).to_le_bytes())?;
         writer.write_all(&(spike.hitbox.pos.y as i32).to_le_bytes())?;
     }
@@ -30,30 +31,39 @@ pub fn loadblocks(
     spike_tex: Texture2D,
 ) -> io::Result<(Vec<Block>, Vec<Spike>)> {
     let mut file = File::open(path)?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-    let mut parts = buffer.splitn(2, |&b| b == b'\n');
-    let block_bytes = parts.next().unwrap_or(&[]);
-    let spike_bytes = parts.next().unwrap_or(&[]);
-    let parse_section = |bytes: &[u8], tex: &Texture2D| -> io::Result<Vec<Block>> {
-        if bytes.len() % 8 != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid world file section size (must be divisible by 8)",
-            ));
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let mut blocks: Vec<Block> = vec![];
+    let mut spikes: Vec<Spike> = vec![];
+    if bytes.len() % 9 != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid world file size (size must be divisible by 9)",
+        ));
+    }
+    for chunk in bytes.chunks_exact(9) {
+        let btype = chunk[0];
+        let x = i32::from_le_bytes(chunk[1..5].try_into().unwrap());
+        let y = i32::from_le_bytes(chunk[5..9].try_into().unwrap());
+        match btype {
+            0 => {
+                blocks.push(
+                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6, block_tex.clone()),
+                );
+            }
+            1 => {
+                spikes.push(
+                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1), spike_tex.clone()),
+                );
+            }
+            _=> {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid block type found (likely generated from newer engine)",
+                ));
+            }
         }
-        let mut blocks = Vec::new();
-        for chunk in bytes.chunks_exact(8) {
-            let x = i32::from_le_bytes(chunk[0..4].try_into().unwrap());
-            let y = i32::from_le_bytes(chunk[4..8].try_into().unwrap());
-            blocks.push(
-                Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6, tex.clone()),
-            );
-        }
-        Ok(blocks)
-    };
-    let blocks = parse_section(block_bytes, &block_tex)?;
-    let spikes: Vec<Spike> = parse_section(spike_bytes, &spike_tex)?.into_iter().map(|b| Spike::new(Vector2i::from(b.hitbox.pos), Vector2i::from(b.hitbox.size), b.texture)).collect();
+    }
     Ok((blocks, spikes))
 }
 
