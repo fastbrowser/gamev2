@@ -4,24 +4,18 @@ use crate::game::World;
 pub struct Input {}
 
 pub enum Event {
-    Jump,
-    Left,
-    Right,
+    Jump(bool),
+    Horizontal(f32),
 }
 
 impl Input {
     pub fn handle(world: &mut World, evt: Event) {
         match evt {
-            Event::Jump => {
-                if world.player.onground {
-                    world.player.vel = world.player.vel.add(0.0, -0.5);
-                }
+            Event::Jump(held) => {
+                world.player.jump_held = held;
             }
-            Event::Left => {
-                world.player.vel.x = -0.5;
-            }
-            Event::Right => {
-                world.player.vel.x = 0.5;
+            Event::Horizontal(dir) => {
+                world.player.vel.x = dir.clamp(-1.0, 1.0)*10.0;
             }
         }
     }

@@ -14,8 +14,8 @@ pub fn saveblocks(path: &str, blocks: Vec<Block>, spikes: Vec<Spike>) -> io::Res
     }
     for spike in &spikes {
         writer.write(&[1]);
-        writer.write_all(&(spike.hitbox.pos.x as i32).to_le_bytes())?;
-        writer.write_all(&(spike.hitbox.pos.y as i32).to_le_bytes())?;
+        writer.write_all(&(spike.drawbox.pos.x as i32).to_le_bytes())?;
+        writer.write_all(&(spike.drawbox.pos.y as i32).to_le_bytes())?;
     }
     writer.flush()?;
     Ok(())
@@ -69,30 +69,42 @@ pub fn loadblocks(
 
 pub fn load(path: &str, tex: Texture2D, playertex: Texture2D, spiketex: Texture2D) -> io::Result<World> {
     let bs = loadblocks(path, tex, spiketex)?;
-    Ok(World { player: Player::new(playertex), blocks: bs.0, spikes: bs.1, windowsize: Vector2f::new(800.0, 600.0), cam: Cam::default()})
+    Ok(World::new(
+        Player::new(playertex),
+        bs.0,
+        bs.1,
+        Vector2f::new(800.0, 600.0),
+        Cam::default(),
+    ))
 }
 
 pub fn getworld1(tex: Texture2D, playertex: Texture2D, spiketex: Texture2D) -> World {    
-    World { player: Player::new(playertex.clone()), blocks: vec![
-        Block::new(Vector2i::new(-10, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-9, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-8, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-7, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-6, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-5, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-4, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-3, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-2, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(-1, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(0, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(1, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(2, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(3, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(4, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(5, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(6, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-        Block::new(Vector2i::new(7, 0), Vector2i::new(1, 1), 0.6, tex.clone()),
-    ], spikes: vec![
-        Spike::new(Vector2i::new(-10, -1), Vector2i::new(1, 1), spiketex.clone())
-    ], windowsize: Vector2f::new(800.0, 600.0), cam: Cam::default()}
+    let mut bytes = include_bytes!("../world.wl");
+    let mut blocks: Vec<Block> = vec![];
+    let mut spikes: Vec<Spike> = vec![];
+    for chunk in bytes.chunks_exact(9) {
+        let btype = chunk[0];
+        let x = i32::from_le_bytes(chunk[1..5].try_into().unwrap());
+        let y = i32::from_le_bytes(chunk[5..9].try_into().unwrap());
+        match btype {
+            0 => {
+                blocks.push(
+                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6, tex.clone()),
+                );
+            }
+            1 => {
+                spikes.push(
+                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1), spiketex.clone()),
+                );
+            }
+            _=> {}
+        }
+    }
+    World::new(
+        Player::new(playertex),
+        blocks,
+        spikes,
+        Vector2f::new(800.0, 600.0),
+        Cam::default(),
+    )
 }

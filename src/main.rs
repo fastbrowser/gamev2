@@ -34,16 +34,17 @@ async fn main() {
             continue;
         }
         world.windowsize = Vector2f::new(screen_width(), screen_height());
-        println!("{:?}", world.player.vel);
-        if !state.dead {phys::tick(&mut world, delta_time as f32);}
-        state = tickloop(&mut world, delta_time, &origworld, &state);
+        if !state.dead {
+            Input::handle(&mut world, input::Event::Jump(is_key_down(KeyCode::Space)));
+            let left = is_key_down(KeyCode::A)||is_key_down(KeyCode::Left);
+            let right = is_key_down(KeyCode::D)||is_key_down(KeyCode::Right);
+            let dir = (right as i32 - left as i32) as f32;
+            Input::handle(&mut world, input::Event::Horizontal(dir));
+            phys::tick(&mut world, delta_time as f32);
+        }
+        tickloop(&mut world, delta_time, &origworld, &mut state);
         world.update_cam();
         world.draw(&state);
-        if !state.dead {
-            if is_key_down(KeyCode::Space) {Input::handle(&mut world, input::Event::Jump);}
-            if is_key_down(KeyCode::D)||is_key_down(KeyCode::Right) {Input::handle(&mut world, input::Event::Right);}
-            if is_key_down(KeyCode::A)||is_key_down(KeyCode::Left) {Input::handle(&mut world, input::Event::Left);}
-        }
         next_frame().await;
     }
 }
