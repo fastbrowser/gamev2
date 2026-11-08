@@ -1,4 +1,4 @@
-use crate::game::World;
+use crate::game::game::SimPlayer;
 
 
 pub struct Input {}
@@ -9,13 +9,13 @@ pub enum Event {
 }
 
 impl Input {
-    pub fn handle(world: &mut World, evt: Event) {
+    pub fn handle(player: &mut SimPlayer, evt: Event) {
         match evt {
             Event::Jump(held) => {
-                world.player.jump_held = held;
+                player.jump_held = held;
             }
             Event::Horizontal(dir) => {
-                world.player.vel.x = dir.clamp(-1.0, 1.0)*10.0;
+                player.vel.x = dir.clamp(-1.0, 1.0)*10.0;
             }
         }
     }

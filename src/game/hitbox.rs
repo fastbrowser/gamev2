@@ -1,4 +1,4 @@
-use crate::vectors::Vector2f;
+use crate::game::vectors::Vector2f;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Hitbox {

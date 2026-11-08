@@ -1,18 +1,18 @@
-use std::{fs::File, io::{self, BufWriter, Error, Read, Write}};
+use std::{collections::HashSet, fs::File, io::{self, BufWriter, Error, Read, Write}};
 
 use macroquad::texture::{FilterMode, Texture2D, load_texture};
 
-use crate::{game::{Block, Cam, Player, Spike, World}, vectors::{Vector2f, Vector2i}};
+use crate::game::{game::{Block, Cam, Player, Spike, World}, vectors::{Vector2f, Vector2i}};
 
-pub fn saveblocks(path: &str, blocks: Vec<Block>, spikes: Vec<Spike>) -> io::Result<()> {
+pub fn saveblocks(path: &str, blocks: &Vec<Block>, spikes: &Vec<Spike>) -> io::Result<()> {
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
-    for block in & blocks {
+    for block in blocks {
         writer.write(&[0]);
         writer.write_all(&(block.hitbox.pos.x as i32).to_le_bytes())?;
         writer.write_all(&(block.hitbox.pos.y as i32).to_le_bytes())?;
     }
-    for spike in &spikes {
+    for spike in spikes {
         writer.write(&[1]);
         writer.write_all(&(spike.drawbox.pos.x as i32).to_le_bytes())?;
         writer.write_all(&(spike.drawbox.pos.y as i32).to_le_bytes())?;
@@ -22,19 +22,18 @@ pub fn saveblocks(path: &str, blocks: Vec<Block>, spikes: Vec<Spike>) -> io::Res
 }
 
 pub fn save(path: &str, world: &World) -> io::Result<()> {
-    saveblocks(path, world.blocks.clone(), world.spikes.clone())
+    saveblocks(path, &world.blocks, &world.spikes)
 }
 
 pub fn loadblocks(
     path: &str,
-    block_tex: Texture2D,
-    spike_tex: Texture2D,
 ) -> io::Result<(Vec<Block>, Vec<Spike>)> {
     let mut file = File::open(path)?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
     let mut blocks: Vec<Block> = vec![];
     let mut spikes: Vec<Spike> = vec![];
+    let mut seen: HashSet<(u8, i32, i32)> = HashSet::new();
     if bytes.len() % 9 != 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -45,15 +44,18 @@ pub fn loadblocks(
         let btype = chunk[0];
         let x = i32::from_le_bytes(chunk[1..5].try_into().unwrap());
         let y = i32::from_le_bytes(chunk[5..9].try_into().unwrap());
+        if !seen.insert((btype, x, y)) {
+            continue;
+        }
         match btype {
             0 => {
                 blocks.push(
-                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6, block_tex.clone()),
+                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6),
                 );
             }
             1 => {
                 spikes.push(
-                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1), spike_tex.clone()),
+                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1)),
                 );
             }
             _=> {
@@ -67,10 +69,10 @@ pub fn loadblocks(
     Ok((blocks, spikes))
 }
 
-pub fn load(path: &str, tex: Texture2D, playertex: Texture2D, spiketex: Texture2D) -> io::Result<World> {
-    let bs = loadblocks(path, tex, spiketex)?;
+pub fn load(path: &str) -> io::Result<World> {
+    let bs = loadblocks(path)?;
     Ok(World::new(
-        Player::new(playertex),
+        Player::new(),
         bs.0,
         bs.1,
         Vector2f::new(800.0, 600.0),
@@ -78,30 +80,34 @@ pub fn load(path: &str, tex: Texture2D, playertex: Texture2D, spiketex: Texture2
     ))
 }
 
-pub fn getworld1(tex: Texture2D, playertex: Texture2D, spiketex: Texture2D) -> World {    
+pub fn getworld1() -> World {    
     let mut bytes = include_bytes!("../world.wl");
     let mut blocks: Vec<Block> = vec![];
     let mut spikes: Vec<Spike> = vec![];
+    let mut seen: HashSet<(u8, i32, i32)> = HashSet::new();
     for chunk in bytes.chunks_exact(9) {
         let btype = chunk[0];
         let x = i32::from_le_bytes(chunk[1..5].try_into().unwrap());
         let y = i32::from_le_bytes(chunk[5..9].try_into().unwrap());
+        if !seen.insert((btype, x, y)) {
+            continue;
+        }
         match btype {
             0 => {
                 blocks.push(
-                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6, tex.clone()),
+                    Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6),
                 );
             }
             1 => {
                 spikes.push(
-                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1), spiketex.clone()),
+                    Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1)),
                 );
             }
             _=> {}
         }
     }
     World::new(
-        Player::new(playertex),
+        Player::new(),
         blocks,
         spikes,
         Vector2f::new(800.0, 600.0),

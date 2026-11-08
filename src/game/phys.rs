@@ -1,7 +1,7 @@
-use crate::{
+use crate::game::{
     game::{
         AIR_ACCEL, AIR_FRICTION, GRAVITY, GROUND_ACCEL, GROUND_FRICTION, JUMP_VELOCITY,
-        MAX_FALL_SPEED, VERTICAL_DRAG, World,
+        MAX_FALL_SPEED, VERTICAL_DRAG, SimWorld,
     },
     hitbox::{Hitbox, YSide},
     vectors::Vector2f,
@@ -9,7 +9,7 @@ use crate::{
 
 const MAX_PHYSICS_STEP: f32 = 1.0 / 240.0;
 
-pub fn tick(world: &mut World, delta_time: f32) {
+pub fn tick(world: &mut SimWorld, delta_time: f32) {
     let mut remaining = (delta_time / 1000.0).clamp(0.0, 0.1);
     let mut candidates: Vec<u32> = Vec::new();
     while remaining > 0.0 {
@@ -19,7 +19,7 @@ pub fn tick(world: &mut World, delta_time: f32) {
     }
 }
 
-fn step(world: &mut World, dt: f32, candidates: &mut Vec<u32>) {
+fn step(world: &mut SimWorld, dt: f32, candidates: &mut Vec<u32>) {
     let was_ground = world.player.onground;
 
     if world.player.input_x != 0.0 {
@@ -53,7 +53,7 @@ fn step(world: &mut World, dt: f32, candidates: &mut Vec<u32>) {
     let mut xcol: Option<f32> = None;
     for &index in candidates.iter() {
         let block = &world.blocks[index as usize];
-        let (xc1, _) = block.hitbox.collision_clamp(&x_hitbox);
+        let (xc1, _) = block.collision_clamp(&x_hitbox);
         if let Some((xc, _side)) = xc1 {
             match xcol {
                 Some(xc2) if (xc - x_hitbox.pos.x).abs() >= (xc2 - x_hitbox.pos.x).abs() => {}
@@ -79,7 +79,7 @@ fn step(world: &mut World, dt: f32, candidates: &mut Vec<u32>) {
     let mut ycol: Option<(f32, YSide)> = None;
     for &index in candidates.iter() {
         let block = &world.blocks[index as usize];
-        let (_, yc1) = block.hitbox.collision_clamp(&y_hitbox);
+        let (_, yc1) = block.collision_clamp(&y_hitbox);
         if let Some((yc, side)) = yc1 {
             match ycol {
                 Some((yc2, _)) if (yc - y_hitbox.pos.y).abs() >= (yc2 - y_hitbox.pos.y).abs() => {}

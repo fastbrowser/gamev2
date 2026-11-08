@@ -89,6 +89,12 @@ impl Vector2f {
     pub fn distsqr(&self, x: f32, y: f32) -> f32 {
         (self.x-x).powi(2)+(self.y-y).powi(2)
     }
+    pub fn lerp(&self, other: Vector2f, t: f32) -> Vector2f {
+        Vector2f {
+            x: self.x + (other.x - self.x) * t,
+            y: self.y + (other.y - self.y) * t,
+        }
+    }
 }
 
 impl std::ops::Add for Vector2f {

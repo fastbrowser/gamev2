@@ -1,4 +1,5 @@
-use gamev2::{game::{Block, Spike}, vectors::{Vector2f, Vector2i}, worlds};
+use gamev2::game::{game::{Block, Spike}, vectors::{Vector2f, Vector2i}};
+use gamev2::worlds;
 use macroquad::prelude::*;
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageLevel};
 
@@ -39,22 +40,18 @@ impl Canvas {
             draw_line(0.0, ypos, self.windowsize.x, ypos, 1.0, BLACK);
         }
     }
-    pub fn draw(&self, mx: f32, my: f32) {
+    pub fn draw(&self, mx: f32, my: f32, blocktex: &Texture2D, spiketex: &Texture2D) {
         clear_background(WHITE);
         self.draw_grid();
         for block in &self.blocks {
             let drawpos = self.glob2rel(block.hitbox.pos.mul(self.zoom, self.zoom));
             if drawpos.x < -self.zoom || drawpos.y < -self.zoom || drawpos.x > self.windowsize.x+self.zoom || drawpos.y > self.windowsize.y+self.zoom {continue;}
-            draw_texture_ex(&block.texture, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * self.zoom, block.hitbox.size.y as f32 * self.zoom, )), ..Default::default() });
+            draw_texture_ex(blocktex, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * self.zoom, block.hitbox.size.y as f32 * self.zoom, )), ..Default::default() });
         }
         for spike in &self.spikes {
             let drawpos = self.glob2rel(spike.drawbox.pos.mul(self.zoom, self.zoom));
             if drawpos.x < -self.zoom || drawpos.y < -self.zoom || drawpos.x > self.windowsize.x+self.zoom || drawpos.y > self.windowsize.y+self.zoom {continue;}
-            draw_texture_ex(&spike.texture, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * self.zoom, spike.drawbox.size.y as f32 * self.zoom, )), ..Default::default() });
-            //if DRAW_HITBOXES {
-            //    let drawhitboxpos = self.glob2rel(spike.hitbox.pos.mul(self.zoom, self.zoom));
-            //    draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, spike.hitbox.size.x as f32 * self.zoom, spike.hitbox.size.y as f32 * self.zoom, 1.0, RED);
-            //}
+            draw_texture_ex(spiketex, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * self.zoom, spike.drawbox.size.y as f32 * self.zoom, )), ..Default::default() });
         }
         
         let half = self.windowsize.mul(0.5, 0.5);
@@ -86,6 +83,13 @@ impl Canvas {
             .iter()
             .position(|b| b.hitbox.pos == pos && b.hitbox.size == Vector2f::ONE)
     }
+
+    fn spike_at_cell(&self, cell: Vector2i) -> Option<usize> {
+        let pos = Vector2f::new(cell.x as f32, cell.y as f32);
+        self.blocks
+            .iter()
+            .position(|b| b.hitbox.pos == pos && b.hitbox.size == Vector2f::ONE)
+    }
 }
 
 pub fn window_conf() -> Conf {
@@ -104,7 +108,7 @@ async fn main() {
     grasstex.set_filter(FilterMode::Nearest);
     let spiketex = Texture2D::from_file_with_format(include_bytes!("../../spike.png"), None);
     spiketex.set_filter(FilterMode::Nearest);
-    let mut canvas = Canvas::new(grasstex.clone(), vec![Block::new(Vector2i::new(0,0), Vector2i::new(1,1), 0.6, grasstex.clone())], vec![Spike::new(Vector2i::new(0,-1), Vector2i::new(1,1), spiketex.clone())]).await;
+    let mut canvas = Canvas::new(grasstex.clone(), vec![Block::new(Vector2i::new(0,0), Vector2i::new(1,1), 0.6)], vec![Spike::new(Vector2i::new(0,-1), Vector2i::new(1,1))]).await;
     let mut lastframepos = Vector2f::new(0.0, 0.0);
     let mut mode = 0;
     let penciltex = Texture2D::from_file_with_format(include_bytes!("../../pencil.png"), None);
@@ -141,7 +145,7 @@ async fn main() {
                 .set_directory(std::env::current_dir().expect("this shouldn't happen"))
                 .pick_file() 
             {
-                match worlds::loadblocks(path.to_str().expect("this shouldn't happen"), grasstex.clone(), spiketex.clone()) {
+                match worlds::loadblocks(path.to_str().expect("this shouldn't happen")) {
                     Ok(blocks) => {
                         canvas = Canvas::new(grasstex.clone(), blocks.0, blocks.1).await;
                     }
@@ -164,7 +168,7 @@ async fn main() {
                 .set_directory(std::env::current_dir().expect("this shouldn't happen"))
                 .save_file() 
             {
-                match worlds::saveblocks(path.to_str().expect("this shouldn't happen"), canvas.blocks.clone(), canvas.spikes.clone()) {
+                match worlds::saveblocks(path.to_str().expect("this shouldn't happen"), &canvas.blocks, &canvas.spikes) {
                     Ok(_) => {}
                     Err(e) => {
                         MessageDialog::new()
@@ -197,7 +201,7 @@ async fn main() {
                 0 => {
                     if canvas.block_at_cell(cell).is_none() {
                         canvas.blocks.push(
-                            Block::new(cell, Vector2i::new(1, 1), 0.6, grasstex.clone()),
+                            Block::new(cell, Vector2i::new(1, 1), 0.6),
                         );
                     }
                 }
@@ -210,16 +214,16 @@ async fn main() {
                     });
                 }
                 2 => {
-                    if canvas.block_at_cell(cell).is_none() {
+                    if canvas.spike_at_cell(cell).is_none() {
                         canvas.spikes.push(
-                            Spike::new(cell, Vector2i::new(1, 1), spiketex.clone()),
+                            Spike::new(cell, Vector2i::new(1, 1)),
                         );
                     }
                 }
                 _ => {}
             }
         }
-        canvas.draw(mp.0, mp.1);
+        canvas.draw(mp.0, mp.1, &grasstex, &spiketex);
         if mode == 1 {
             draw_texture_ex(&backpenciltex, mp.0, mp.1-16.0, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( 30.0, 30.0)), ..Default::default() });
         } else {
