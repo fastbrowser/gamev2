@@ -221,11 +221,13 @@ impl World {
         pos.subvec(self.cam.pos).add((self.windowsize.x/2.0) as f32, (self.windowsize.y/2.0) as f32)
     }
     pub fn draw(&self, state: &mut RenderState, textures: &Textures) {
+        state.rendered_blocks = 0;
+        state.rendered_spikes = 0;
         clear_background(WHITE);
         for block in &self.blocks {
             let drawpos = self.glob2rel(block.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
             if drawpos.x < -SCALE_PIXELS_SIZE || drawpos.y < -SCALE_PIXELS_SIZE || drawpos.x > self.windowsize.x+SCALE_PIXELS_SIZE || drawpos.y > self.windowsize.y+SCALE_PIXELS_SIZE {continue;}
-            draw_texture_ex(&textures.block, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.block.as_ref().expect("shouldn't happen"), drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
             if DRAW_HITBOXES {
                 let drawhitboxpos = self.glob2rel(block.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
                 draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, 2.0, RED);
@@ -235,7 +237,7 @@ impl World {
         for spike in &self.spikes {
             let drawpos = self.glob2rel(spike.drawbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
             if drawpos.x < -SCALE_PIXELS_SIZE || drawpos.y < -SCALE_PIXELS_SIZE || drawpos.x > self.windowsize.x+SCALE_PIXELS_SIZE || drawpos.y > self.windowsize.y+SCALE_PIXELS_SIZE {continue;}
-            draw_texture_ex(&textures.spike, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.drawbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.spike.as_ref().expect("shouldn't happen"), drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.drawbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
             if DRAW_HITBOXES {
                 let drawhitboxpos = self.glob2rel(spike.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
                 draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, spike.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, 2.0, RED);
@@ -246,7 +248,7 @@ impl World {
         let mut drawpos: Vector2f;
         if !state.dead {
             drawpos = self.glob2rel(self.player.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
-            draw_texture_ex(&textures.player, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( self.player.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, self.player.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.player.as_ref().expect("shouldn't happen"), drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( self.player.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, self.player.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
         }
         
         for particle in &state.deathparticles {
@@ -464,6 +466,4 @@ pub async fn drawloop(world: &mut World, sim: &SimHandle, render_state: &mut Ren
             .collect();
     }
     world.draw(render_state, textures);
-    render_state.rendered_blocks = 0;
-    render_state.rendered_spikes = 0;
 }

@@ -2,18 +2,18 @@ use macroquad::{input::{KeyCode, is_key_pressed}, texture::Texture2D, time::get_
 
 use crate::{f3, game::{game::{RenderState, World, drawloop}, sim::SimHandle}, tex::Textures};
 
-pub struct GameWrapper<'a> {
+pub struct GameWrapper {
     world: World,
     sim: SimHandle,
     render_state: RenderState,
     i: f32,
-    textures: &'a Textures,
+    textures: Textures,
     showf3: bool,
     paused: bool,
 }
 
-impl<'a> GameWrapper<'a> {
-    pub fn new(world: World, textures: &'a Textures) -> Self {
+impl GameWrapper {
+    pub fn new(world: World, textures: Textures) -> Self {
         let player_img = textures.player.clone().expect("shouldn't happen").get_texture_data();
         let mut player_palette = Vec::with_capacity(16 * 16);
         for y in 0..16 {
@@ -38,7 +38,7 @@ impl<'a> GameWrapper<'a> {
             self.render_state.fps = 1.0/get_frame_time();
         }
         self.i+=get_frame_time();
-        drawloop(&mut self.world, &self.sim, &mut self.render_state, self.textures).await;
+        drawloop(&mut self.world, &self.sim, &mut self.render_state, &self.textures).await;
         if self.showf3 {
             f3::draw(&self.render_state, &self.world);
         }

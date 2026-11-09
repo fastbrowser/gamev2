@@ -1,4 +1,6 @@
-use macroquad::{color::{Color, GRAY, WHITE}, input::{MouseButton, get_keys_down, is_key_down, is_key_pressed, is_mouse_button_down, mouse_position}, shapes::draw_rectangle, text::{draw_text, measure_text}, window::{screen_height, screen_width}};
+use macroquad::prelude::*;
+
+use crate::menu::iface::{self, Ui};
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum GameState {
@@ -10,7 +12,8 @@ pub enum GameState {
 pub struct Menu {
     pub enteringlevel: bool,
     pub enteringtimeelapsed: f32,
-    pub gamestate: GameState
+    pub gamestate: GameState,
+    pub showinghelp: bool,
 }
 
 impl Menu {
@@ -18,64 +21,82 @@ impl Menu {
         Self { 
             enteringlevel: false,
             enteringtimeelapsed: 0f32,
-            gamestate: GameState::Stopped
+            gamestate: GameState::Stopped,
+            showinghelp: false,
         }
     }
     pub async fn draw(&mut self) -> GameState {
-        let sw = screen_width();
-        let sh = screen_height();
-        if is_key_pressed(macroquad::input::KeyCode::Escape) {
+        if is_key_pressed(KeyCode::Escape) {
             self.gamestate = match self.gamestate {
                 GameState::Running => GameState::Paused,
                 GameState::Paused => GameState::Running,
                 GameState::Stopped => GameState::Stopped,
             }
         }
-        let mut btnw: f32 = 200.0;
-        let mut btnx = sw/2.0-btnw/2.0;
-        let mut btnh: f32 = 50.0;
-        let mut btny = sh/2.0-btnh/2.0;
-        let mut fontsize = 36.0f32;
-        const BTNEXP: f32 = 1.5;
-        let mp = mouse_position();
-        if self.gamestate == GameState::Stopped {
-            if mp.0>btnx
-                && mp.0<btnx+btnw
-                && mp.1>btny
-                && mp.1<btny+btnh
-            {
-                btnw = btnw*BTNEXP;
-                btnh = btnh*BTNEXP;
-                btnx = sw/2.0-btnw/2.0;
-                btny = sh/2.0-btnh/2.0;
-                fontsize = fontsize*BTNEXP;
-                if is_mouse_button_down(MouseButton::Left) {
-                    self.gamestate = GameState::Running;
-                }
+        let ui = Ui::new();
+        if self.showinghelp {
+            ui.overlay(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.6 });
+            if ui.centered_column(iface::Column::new(vec![
+                iface::Element::from(iface::Text::new("Help").font_size(56.0)),
+                iface::Element::from(iface::Text::new("How to play:\n   A/D: left/right\n   Space: Jump\n   Esc: pause\nYou can make your own levels using the level editor.").font_size(30.0)),
+                iface::Element::from(ui.button("Ok", Rect::new(0.0, 0.0, 200.0, 50.0))
+                    .font_size(36.0)
+                    .hover_scale(1.5))
+            ]).gap(24.0)).is_some() {
+                self.showinghelp = false;
             }
-            draw_rectangle(btnx, btny, btnw, btnh, GRAY);
-            let dims = measure_text("Play", None, fontsize as u16, 1.0);
-            draw_text("Play", btnx+btnw/2.0-dims.width/2.0, dims.offset_y+btny+btnh/2.0-dims.height/2.0, fontsize, WHITE);
         }
-        if self.gamestate == GameState::Paused {
-            draw_rectangle(0.0, 0.0, sw, sh, Color { r: 0.0, g: 0.0, b: 0.0, a: 0.6 });
-            if mp.0>btnx
-                && mp.0<btnx+btnw
-                && mp.1>btny
-                && mp.1<btny+btnh
-            {
-                btnw = btnw*BTNEXP;
-                btnh = btnh*BTNEXP;
-                btnx = sw/2.0-btnw/2.0;
-                btny = sh/2.0-btnh/2.0;
-                fontsize = fontsize*BTNEXP;
-                if is_mouse_button_down(MouseButton::Left) {
-                    self.gamestate = GameState::Running;
+        match self.gamestate {
+            GameState::Stopped => {
+                if !self.showinghelp {
+                    let play = ui.button("Play", Rect::new(0.0, 0.0, 200.0, 50.0))
+                        .font_size(36.0)
+                        .hover_scale(1.5)
+                        .id("play");
+                    let help = ui.button("Help", Rect::new(0.0, 0.0, 200.0, 50.0))
+                        .font_size(36.0)
+                        .hover_scale(1.5)
+                        .id("help");
+                    if let Some(id) = ui.centered_column(iface::Column::new(vec![
+                        iface::Element::from(iface::Text::new("gv2").font_size(56.0)),
+                        iface::Element::from(play),
+                        iface::Element::from(help),
+                    ]).gap(24.0)) {
+                        if id=="play" {
+                            self.gamestate = GameState::Running;
+                        }
+                        if id=="help" {
+                            self.showinghelp = true;
+                        }
+                    }
                 }
             }
-            draw_rectangle(btnx, btny, btnw, btnh, GRAY);
-            let dims = measure_text("Resume", None, fontsize as u16, 1.0);
-            draw_text("Resume", btnx+btnw/2.0-dims.width/2.0, dims.offset_y+btny+btnh/2.0-dims.height/2.0, fontsize, WHITE);
+            GameState::Paused => {
+                if !self.showinghelp {
+                    ui.overlay(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.6 });
+                    let resume = ui.button("Resume", Rect::new(0.0, 0.0, 200.0, 50.0))
+                        .font_size(36.0)
+                        .hover_scale(1.5)
+                        .id("resume");
+                    let help = ui.button("Help", Rect::new(0.0, 0.0, 200.0, 50.0))
+                        .font_size(36.0)
+                        .hover_scale(1.5)
+                        .id("help");
+                    if let Some(id) = ui.centered_column(iface::Column::new(vec![
+                        iface::Element::from(iface::Text::new("Paused").font_size(40.0)),
+                        iface::Element::from(resume),
+                        iface::Element::from(help),
+                    ]).gap(24.0)) {
+                        if id=="help" {
+                            self.showinghelp = true;
+                        }
+                        if id=="resume" {
+                            self.gamestate = GameState::Running;
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
         self.gamestate.clone()
     }

@@ -17,11 +17,12 @@ pub fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let textures = Textures {
-        player: {let t = Texture2D::from_file_with_format(include_bytes!("../player.png"), None);t.set_filter(FilterMode::Nearest);t},
-        block: {let t = Texture2D::from_file_with_format(include_bytes!("../player.png"), None);t.set_filter(FilterMode::Nearest);t},
-        spike: {let t = Texture2D::from_file_with_format(include_bytes!("../player.png"), None);t.set_filter(FilterMode::Nearest);t},
+    let defaulttextures = Textures {
+        player: {let t = Texture2D::from_file_with_format(include_bytes!("../player.png"), None);t.set_filter(FilterMode::Nearest);Some(t)},
+        block: {let t = Texture2D::from_file_with_format(include_bytes!("../block.png"), None);t.set_filter(FilterMode::Nearest);Some(t)},
+        spike: {let t = Texture2D::from_file_with_format(include_bytes!("../spike.png"), None);t.set_filter(FilterMode::Nearest);Some(t)},
     };
+    let mut textures = defaulttextures.clone();
     let mut menu = Menu::new();
     let mut gw = None;
     let mut gs = GameState::Running;
@@ -29,12 +30,17 @@ async fn main() {
         if gs==GameState::Running && gw.is_none() {
             let world: World;
             if let Ok(w) = worlds::load("world.wl") {
-                world = w;
+                world = w.0;
+                textures = Textures {
+                    block: w.1.block.or_else(|| defaulttextures.block.clone()),
+                    spike: w.1.spike.or_else(|| defaulttextures.spike.clone()),
+                    player: w.1.player.or_else(|| defaulttextures.player.clone()),
+                };
             } else {
                 world = worlds::getworld1();
-                let _ = worlds::save("world.wl", &world);
+                let _ = worlds::save("world.wl", &world, &textures);
             }
-            gw = Some(GameWrapper::new(world, &textures));
+            gw = Some(GameWrapper::new(world, textures.clone()));
         }
         if gs == GameState::Stopped {
             if let Some(mut g) = gw.take() {
@@ -47,12 +53,14 @@ async fn main() {
         }
         if gs == GameState::Running {
             if gw.is_none() {
-                let data = worlds::load("world.wl").unwrap_or_else(|_| {
-                    let w = worlds::getworld1();
-                    let _ = worlds::save("world.wl", &w);
-                    w
-                });
-                gw = Some(GameWrapper::new(data.0, data.1, &textures));
+                gw = match worlds::load("world.wl") {
+                    Ok(d) => Some(GameWrapper::new(d.0, d.1)),
+                    Err(_) => {
+                        let w = worlds::getworld1();
+                        let _ = worlds::save("world.wl", &w, &defaulttextures);
+                        Some(GameWrapper::new(w, defaulttextures.clone()))
+                    }
+                };
             }
             if let Some(g) = gw.as_mut() {
                 g.frame().await;
@@ -62,5 +70,4 @@ async fn main() {
         gs = menu.draw().await;
         next_frame().await;
     }
-    
 }

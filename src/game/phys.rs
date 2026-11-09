@@ -9,6 +9,19 @@ use crate::game::{
 
 const MAX_PHYSICS_STEP: f32 = 1.0 / 240.0;
 
+/// Ignore sub-pixel overlaps. Without this, `-8.9 + 0.9 != -8.0` in f32 makes
+/// a player resting on a block count as "colliding" with the block underfoot,
+/// and the horizontal pass then ejects it sideways off the ledge.
+const COLLISION_EPSILON: f32 = 1.0e-4;
+
+fn overlap_x(a: &Hitbox, b: &Hitbox) -> f32 {
+    (a.pos.x + a.size.x).min(b.pos.x + b.size.x) - a.pos.x.max(b.pos.x)
+}
+
+fn overlap_y(a: &Hitbox, b: &Hitbox) -> f32 {
+    (a.pos.y + a.size.y).min(b.pos.y + b.size.y) - a.pos.y.max(b.pos.y)
+}
+
 pub fn tick(world: &mut SimWorld, delta_time: f32) {
     let mut remaining = (delta_time / 1000.0).clamp(0.0, 0.1);
     let mut candidates: Vec<u32> = Vec::new();
@@ -35,38 +48,55 @@ fn step(world: &mut SimWorld, dt: f32, candidates: &mut Vec<u32>) {
     let new_x = old.pos.x + world.player.vel.x * dt;
     let new_y = old.pos.y + world.player.vel.y * dt;
 
-    let sweep = Hitbox {
-        pos: Vector2f::new(old.pos.x.min(new_x), old.pos.y.min(new_y)),
-        size: Vector2f::new(
-            old.size.x + (new_x - old.pos.x).abs(),
-            old.size.y + (new_y - old.pos.y).abs(),
-        ),
-    };
-    world.block_grid.query(&sweep, candidates);
-
-    let x_hitbox = Hitbox {
-        pos: Vector2f { x: new_x, y: old.pos.y },
-        size: old.size,
-    };
-
     let mut x_pos = new_x;
-    let mut xcol: Option<f32> = None;
-    for &index in candidates.iter() {
-        let block = &world.blocks[index as usize];
-        let (xc1, _) = block.collision_clamp(&x_hitbox);
-        if let Some((xc, _side)) = xc1 {
-            match xcol {
-                Some(xc2) if (xc - x_hitbox.pos.x).abs() >= (xc2 - x_hitbox.pos.x).abs() => {}
-                _ => xcol = Some(xc),
+
+    // Only resolve horizontal collisions when the player is actually moving
+    // horizontally. A stationary/falling player must never be pushed sideways
+    // by the block it is standing on.
+    if new_x != old.pos.x {
+        let sweep = Hitbox {
+            pos: Vector2f::new(old.pos.x.min(new_x), old.pos.y),
+            size: Vector2f::new(old.size.x + (new_x - old.pos.x).abs(), old.size.y),
+        };
+        world.block_grid.query(&sweep, candidates);
+
+        let x_hitbox = Hitbox {
+            pos: Vector2f { x: new_x, y: old.pos.y },
+            size: old.size,
+        };
+
+        let mut xcol: Option<f32> = None;
+        for &index in candidates.iter() {
+            let block = &world.blocks[index as usize];
+            // Only blocks with real vertical overlap are walls. Blocks the
+            // player is merely resting on (epsilon overlap) must not block
+            // horizontal movement.
+            if overlap_y(&x_hitbox, block) <= COLLISION_EPSILON {
+                continue;
+            }
+            let (xc1, _) = block.collision_clamp(&x_hitbox);
+            if let Some((xc, _side)) = xc1 {
+                match xcol {
+                    Some(xc2) if (xc - x_hitbox.pos.x).abs() >= (xc2 - x_hitbox.pos.x).abs() => {}
+                    _ => xcol = Some(xc),
+                }
             }
         }
-    }
 
-    if let Some(xc) = xcol {
-        x_pos = xc;
-        world.player.vel.x = 0.0;
+        if let Some(xc) = xcol {
+            x_pos = xc;
+            world.player.vel.x = 0.0;
+        }
     }
     world.player.hitbox.pos.x = x_pos;
+
+    // Query again using the resolved x: the horizontal clamp may have moved
+    // the player into a neighbouring cell that the original sweep missed.
+    let y_sweep = Hitbox {
+        pos: Vector2f::new(x_pos, old.pos.y.min(new_y)),
+        size: Vector2f::new(old.size.x, old.size.y + (new_y - old.pos.y).abs()),
+    };
+    world.block_grid.query(&y_sweep, candidates);
 
     let y_hitbox = Hitbox {
         pos: Vector2f { x: x_pos, y: new_y },
@@ -79,6 +109,12 @@ fn step(world: &mut SimWorld, dt: f32, candidates: &mut Vec<u32>) {
     let mut ycol: Option<(f32, YSide)> = None;
     for &index in candidates.iter() {
         let block = &world.blocks[index as usize];
+        // Only blocks with real horizontal overlap are floors/ceilings.
+        // Blocks the player is merely brushing on the side must not stop
+        // vertical movement.
+        if overlap_x(&y_hitbox, block) <= COLLISION_EPSILON {
+            continue;
+        }
         let (_, yc1) = block.collision_clamp(&y_hitbox);
         if let Some((yc, side)) = yc1 {
             match ycol {

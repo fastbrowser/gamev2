@@ -24,7 +24,7 @@ pub fn saveblocks(path: &str, blocks: &Vec<Block>, spikes: &Vec<Spike>, textures
     writer.write_all(&(3u64).to_le_bytes())?; // n textures = 3
     
     // 0 = block texture
-    let b_tex = textures.block.get_texture_data();
+    let b_tex = textures.block.as_ref().expect("shouldn't happen").get_texture_data();
     writer.write_all(&[0u8])?;
     writer.write_all(&b_tex.width.to_le_bytes())?;
     writer.write_all(&b_tex.height.to_le_bytes())?;
@@ -32,7 +32,7 @@ pub fn saveblocks(path: &str, blocks: &Vec<Block>, spikes: &Vec<Spike>, textures
     writer.write_all(&b_tex.bytes)?;
     
     // 1 = spike texture
-    let s_tex = textures.spike.get_texture_data();
+    let s_tex = textures.spike.as_ref().expect("shouldn't happen").get_texture_data();
     writer.write_all(&[1u8])?;
     writer.write_all(&s_tex.width.to_le_bytes())?;
     writer.write_all(&s_tex.height.to_le_bytes())?;
@@ -40,7 +40,7 @@ pub fn saveblocks(path: &str, blocks: &Vec<Block>, spikes: &Vec<Spike>, textures
     writer.write_all(&s_tex.bytes)?;
     
     // 2 = player texture
-    let p_tex = textures.player.get_texture_data();
+    let p_tex = textures.player.as_ref().expect("shouldn't happen").get_texture_data();
     writer.write_all(&[2u8])?;
     writer.write_all(&p_tex.width.to_le_bytes())?;
     writer.write_all(&p_tex.height.to_le_bytes())?;
@@ -73,9 +73,9 @@ pub fn loadblocks(path: &str) -> io::Result<(Vec<Block>, Vec<Spike>, Textures)> 
     let mut spikes: Vec<Spike> = vec![];
     let mut seen: HashSet<(u8, i32, i32)> = HashSet::new();
     let mut textures = Textures {
-        block: Texture2D::empty(),
-        spike: Texture2D::empty(),
-        player: Texture2D::empty(),
+        block: None,
+        spike: None,
+        player: None,
     };
     
     let total = file.metadata()?.len();
@@ -93,7 +93,7 @@ pub fn loadblocks(path: &str) -> io::Result<(Vec<Block>, Vec<Spike>, Textures)> 
             0 => {
                 let x = i32::from_le_bytes(fread_exact(&mut file)?);
                 let y = i32::from_le_bytes(fread_exact(&mut file)?);
-                read += 8; // 4 bytes for x + 4 bytes for y
+                read += 8;
                 
                 if seen.insert((0, x, y)) {
                     blocks.push(Block::new(Vector2i::new(x, y), Vector2i::new(1, 1), 0.6));
@@ -102,7 +102,7 @@ pub fn loadblocks(path: &str) -> io::Result<(Vec<Block>, Vec<Spike>, Textures)> 
             1 => {
                 let x = i32::from_le_bytes(fread_exact(&mut file)?);
                 let y = i32::from_le_bytes(fread_exact(&mut file)?);
-                read += 8; // 4 bytes for x + 4 bytes for y
+                read += 8;
                 
                 if seen.insert((1, x, y)) {
                     spikes.push(Spike::new(Vector2i::new(x, y), Vector2i::new(1, 1)));
@@ -110,8 +110,7 @@ pub fn loadblocks(path: &str) -> io::Result<(Vec<Block>, Vec<Spike>, Textures)> 
             }
             2 => {
                 if hs2 { 
-                    // If we encounter section 2 again or skip remaining, handle gracefully
-                    break; 
+                    continue; 
                 }
                 hs2 = true;
                 read += 8; // ntex u64
@@ -134,9 +133,9 @@ pub fn loadblocks(path: &str) -> io::Result<(Vec<Block>, Vec<Spike>, Textures)> 
                     read += tlen;
 
                     match t {
-                        0 => { textures.block = Texture2D::from_rgba8(w, h, &tdata); }
-                        1 => { textures.spike = Texture2D::from_rgba8(w, h, &tdata); }
-                        2 => { textures.player = Texture2D::from_rgba8(w, h, &tdata); }
+                        0 => { textures.block = Some({let t = Texture2D::from_rgba8(w, h, &tdata); t.set_filter(FilterMode::Nearest); t}) }
+                        1 => { textures.spike = Some({let t = Texture2D::from_rgba8(w, h, &tdata); t.set_filter(FilterMode::Nearest); t}) }
+                        2 => { textures.player = Some({let t = Texture2D::from_rgba8(w, h, &tdata); t.set_filter(FilterMode::Nearest); t}) }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
