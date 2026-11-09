@@ -104,7 +104,7 @@ pub fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let grasstex = Texture2D::from_file_with_format(include_bytes!("../../grass.png"), None);
+    let grasstex = Texture2D::from_file_with_format(include_bytes!("../../block.png"), None);
     grasstex.set_filter(FilterMode::Nearest);
     let spiketex = Texture2D::from_file_with_format(include_bytes!("../../spike.png"), None);
     spiketex.set_filter(FilterMode::Nearest);

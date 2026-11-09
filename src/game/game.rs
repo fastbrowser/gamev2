@@ -8,6 +8,7 @@ use ::rand::{random, random_range};
 use crate::game::hitbox::Hitbox;
 use crate::game::sim::{SIM_TICK_MILLIS, SIM_TICK_SECONDS, SimHandle, SimInput};
 use crate::game::vectors::{Vector2f, Vector2i};
+use crate::tex::Textures;
 
 #[derive(Clone, Default)]
 pub struct SpatialGrid {
@@ -219,12 +220,12 @@ impl World {
     pub fn glob2rel(&self, pos: Vector2f) -> Vector2f {
         pos.subvec(self.cam.pos).add((self.windowsize.x/2.0) as f32, (self.windowsize.y/2.0) as f32)
     }
-    pub fn draw(&self, state: &mut RenderState, blocktex: &Texture2D, playertex: &Texture2D, spiketex: &Texture2D) {
+    pub fn draw(&self, state: &mut RenderState, textures: &Textures) {
         clear_background(WHITE);
         for block in &self.blocks {
             let drawpos = self.glob2rel(block.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
             if drawpos.x < -SCALE_PIXELS_SIZE || drawpos.y < -SCALE_PIXELS_SIZE || drawpos.x > self.windowsize.x+SCALE_PIXELS_SIZE || drawpos.y > self.windowsize.y+SCALE_PIXELS_SIZE {continue;}
-            draw_texture_ex(blocktex, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.block, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
             if DRAW_HITBOXES {
                 let drawhitboxpos = self.glob2rel(block.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
                 draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, block.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, block.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, 2.0, RED);
@@ -234,7 +235,7 @@ impl World {
         for spike in &self.spikes {
             let drawpos = self.glob2rel(spike.drawbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
             if drawpos.x < -SCALE_PIXELS_SIZE || drawpos.y < -SCALE_PIXELS_SIZE || drawpos.x > self.windowsize.x+SCALE_PIXELS_SIZE || drawpos.y > self.windowsize.y+SCALE_PIXELS_SIZE {continue;}
-            draw_texture_ex(spiketex, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.drawbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.spike, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( spike.drawbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.drawbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
             if DRAW_HITBOXES {
                 let drawhitboxpos = self.glob2rel(spike.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
                 draw_rectangle_lines(drawhitboxpos.x, drawhitboxpos.y, spike.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, spike.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, 2.0, RED);
@@ -245,7 +246,7 @@ impl World {
         let mut drawpos: Vector2f;
         if !state.dead {
             drawpos = self.glob2rel(self.player.hitbox.pos.mul(SCALE_PIXELS_SIZE, SCALE_PIXELS_SIZE));
-            draw_texture_ex(playertex, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( self.player.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, self.player.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
+            draw_texture_ex(&textures.player, drawpos.x, drawpos.y, WHITE, DrawTextureParams { dest_size: Some(Vec2::new( self.player.hitbox.size.x as f32 * SCALE_PIXELS_SIZE, self.player.hitbox.size.y as f32 * SCALE_PIXELS_SIZE, )), ..Default::default() });
         }
         
         for particle in &state.deathparticles {
@@ -434,7 +435,7 @@ pub fn tickloop(world: &mut SimWorld, delta_time: f32, state: &mut TickState) {
     state.deathparticles = particles;
 }
 
-pub async fn drawloop(world: &mut World, sim: &SimHandle, render_state: &mut RenderState, blocktex: &Texture2D, playertex: &Texture2D, spiketex: &Texture2D) {
+pub async fn drawloop(world: &mut World, sim: &SimHandle, render_state: &mut RenderState, textures: &Textures) {
     world.windowsize = Vector2f::new(screen_width(), screen_height());
     let left = is_key_down(KeyCode::A) || is_key_down(KeyCode::Left);
     let right = is_key_down(KeyCode::D) || is_key_down(KeyCode::Right);
@@ -462,7 +463,7 @@ pub async fn drawloop(world: &mut World, sim: &SimHandle, render_state: &mut Ren
             })
             .collect();
     }
-    world.draw(render_state, blocktex, playertex, spiketex);
+    world.draw(render_state, textures);
     render_state.rendered_blocks = 0;
     render_state.rendered_spikes = 0;
 }
